@@ -1,0 +1,7 @@
+{
+  "name": "omp-harness-fix",
+  "version": "1.0.0",
+  "description": "Tool Input Repair Layer and Humanized Errors for OMP",
+  "main": "index.js",
+  "type": "commonjs"
+}
