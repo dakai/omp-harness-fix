@@ -102,8 +102,7 @@ try parse(input) をそのまま
 ## インストール
 
 ```bash
-npm install omp-harness-fix
-# または index.js を OMP の plugins ディレクトリにコピー
+omp install git:github.com/dakai/omp-harness-fix
 ```
 
 ## 使い方

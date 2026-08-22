@@ -102,8 +102,7 @@ Same shape as `cheap-then-careful` everywhere else: try the fast path, fall back
 ## Installation
 
 ```bash
-npm install omp-harness-fix
-# or copy index.js into your OMP plugins directory
+omp install git:github.com/dakai/omp-harness-fix
 ```
 
 ## Usage
