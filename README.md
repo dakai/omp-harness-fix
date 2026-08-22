@@ -10,7 +10,9 @@ Inspired by **Command Code**'s engineering post: [How did we make DeepSeek outpe
 
 > "open model bad at tool calling" is almost always a harness problem, not a model problem.
 
-Command Code ran billions of tokens through DeepSeek (flash / v4 Pro), GLM, Qwen inside their open-source CLI. The same 4 failure modes repeated across every open model (~90% of failures). Commercial models like Claude Opus 4.7 absorb the cost invisibly — they've seen enough contracts during pretraining to be lenient. Open models pay it loudly and get dismissed for it.
+A lot of what looks like model capability is actually **contract design**. A strict schema is a choice with a cost: it filters out noise, but it also filters out recoverable noise from any model that hasn't memorized the exact JSON contract you happened to pick.
+
+Command Code ran billions of tokens through DeepSeek (flash / v4 Pro), GLM, Qwen inside their open-source CLI. The same 4 failure modes repeated across every open model (~90% of failures). Commercial models like Claude Opus 4.7 have seen enough contracts during pretraining to be lenient — the cost is absorbed invisibly. Open models pay it loudly and get dismissed as "not capable".
 
 The fix isn't a better model. It's a more forgiving contract — in exactly the right places.
 
