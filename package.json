@@ -4,6 +4,9 @@
   "description": "Tool Input Repair Layer and Humanized Errors for OMP",
   "main": "index.js",
   "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  },
   "omp": {
     "extensions": ["./extension.mjs"]
   },

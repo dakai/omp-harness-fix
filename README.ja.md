@@ -103,7 +103,8 @@ try parse(input) をそのまま
 ## インストール
 
 ```bash
-omp install git:github.com/dakai/omp-harness-fix
+omp install git:github.com/dakai/omp-harness-fix    # OMP
+opencode plugin add github:dakai/omp-harness-fix   # OpenCode
 ```
 
 ## 使い方
@@ -129,6 +130,37 @@ await plugin.onToolCall({ toolName: 'readFile', input });
 await plugin.onToolError({ toolName: 'readFile', error });
 ```
 
+### OpenCode プラグインとして
+
+OpenCode が読むのはプラグインの **デフォルトエクスポート**で、CommonJS モジュールではそれが
+`module.exports` そのもの。つまり `id` + `setup` があれば `index.js` はそのまま OpenCode でも動きます。
+
+```bash
+opencode plugin add github:dakai/omp-harness-fix
+```
+
+3 つの層は 2 つのフックに載ります：
+
+| 層 | フック | 動作 |
+|----|--------|------|
+| Markdown 自動リンクの解包、Go/Svelte ルール、関係的デフォルト | `execute.before` | `event.input` をその場で書き換え |
+| 透明性のための `Note:` | `execute.after` | ツール結果に注記を追記 |
+| 人間味のあるエラー | `execute.after`（`status === "error"`） | `invalid_type`/`Expected` の生スキーマ出力だけを書き換え、通常のエラーはそのまま |
+
+OpenCode 固有の注意点：
+
+- OpenCode 2.0.32+ には同じ 4 形状の **スキーマ駆動**修復（組み込みプラグイン
+  `opencode.tool.input.repair`）が既に入っているため、OpenCode 側では即時の形状修復を**行いません**。
+  それを重ねると、実行時がたいてい正しく直した入力に粗い二度目の処理をかけることになります。
+  `repairInput` は、その層を持たない OMP/pi 向けにそのまま残します。
+- `PluginContext` に logger がないため、下記のツール別テレメトリは OMP 側のみの機能です。
+
+ローカル開発では `opencode.json` からチェックアウト先を直接指せます（ファイルは監視されており、保存で反映されます）：
+
+```json
+{ "plugin": ["/abs/path/to/omp-harness-fix"] }
+```
+
 ### スタンドアロン
 
 ```js
@@ -143,11 +175,14 @@ const fixed = repairInput({ path: null, tags: '["a","b"]' });
 
 ```
 .
-├── index.js      # すべての修復ロジック + OMP フック（約 150 行）
+├── index.js            # すべての修復ロジック + OMP / OpenCode フック（約 200 行）
+├── extension.mjs       # pi/OMP 拡張エントリ
+├── test/
+│   └── opencode.test.js  # OpenCode フックのテスト（node:test、依存なし）
 └── package.json
 ```
 
-依存関係なし、ビルドステップなし。
+依存関係なし、ビルドステップなし。`npm test` でフックのテストが走ります。
 
 ## 設計原則（記事より）
 

@@ -4,6 +4,24 @@
  * https://commandcode.ai/blog/how-did-we-make-deepseek-outperform-claude-opus-4.7
  */
 
+// Fix 2: degenerate markdown auto-link only — [notes.md](http://notes.md) → notes.md.
+// Real markdown [click](https://x.com) must pass through untouched.
+function unwrapMarkdown(value) {
+ return value.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, (match, text, url) => {
+  const urlWithoutProtocol = url.replace(/^https?:\/\//, '');
+  if (text === urlWithoutProtocol || text === url) return text;
+  return match;
+ });
+}
+
+// The OpenCode path takes the markdown unwrap without the eager shape repairs.
+function unwrapMarkdownPaths(input) {
+ for (const key of Object.keys(input)) {
+  if (typeof input[key] === 'string') input[key] = unwrapMarkdown(input[key]);
+ }
+ return input;
+}
+
 function repairInput(rawInput) {
  if (!rawInput || typeof rawInput !== 'object') return rawInput;
 
@@ -21,13 +39,7 @@ function repairInput(rawInput) {
   }
 
   if (typeof value === 'string') {
-   // Fix 2: degenerate markdown auto-link only — [notes.md](http://notes.md) → notes.md
-   // Real markdown [click](https://x.com) must pass through untouched.
-   value = value.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, (match, text, url) => {
-    const urlWithoutProtocol = url.replace(/^https?:\/\//, '');
-    if (text === urlWithoutProtocol || text === url) return text;
-    return match;
-   });
+   value = unwrapMarkdown(value);
 
    // Fix 3: JSON stringified array → real array (must run before bare-string wrap)
    if (value.trim().startsWith('[') && value.trim().endsWith(']')) {
@@ -130,8 +142,65 @@ function applyLanguageRules(toolName, input) {
  return input;
 }
 
+// What applyRelationalDefaults chose, said out loud (README: transparency over magic).
+function relationalNote(before, after) {
+ const added = ['offset', 'limit'].filter((key) => before[key] === undefined && after[key] !== undefined);
+ if (added.length === 0) return;
+ const values = added.map((key) => `${key}=${after[key]}`).join(', ');
+ return `Note: ${added.join(' and ')} was not provided; defaulted to ${values}. To read a different range, retry with both offset and limit.`;
+}
+
 module.exports = {
+ id: 'omp-harness-fix',
  name: 'omp-harness-fix',
+
+ // OpenCode loads a plugin's default export, and for CommonJS that default IS
+ // module.exports — so `id` + `setup` make this same file an OpenCode plugin.
+ // Hooks mutate the event in place and return nothing; both payloads carry
+ // `tool` and `id` (the callID), execute.after adds `status` + `result`|`error`.
+ async setup(ctx) {
+  const notes = new Map();
+
+  await ctx.tool.hook('execute.before', (event) => {
+   try {
+    // CodeMode's `execute` tool takes a code string, not an object — never touch it.
+    if (!event.input || typeof event.input !== 'object') return;
+    // OpenCode repairs the four shapes schema-driven itself (built-in
+    // `opencode.tool.input.repair`), so only the gaps are filled here. The
+    // snapshot is what the model actually sent, for the defaulted-key note.
+    const raw = { ...event.input };
+    const repaired = applyLanguageRules(event.tool, applyRelationalDefaults(event.tool, unwrapMarkdownPaths({ ...raw })));
+    event.input = repaired;
+    const note = relationalNote(raw, repaired);
+    if (note) notes.set(event.id, note);
+   } catch (e) {
+    // a broken repair must never break the tool call
+   }
+  });
+
+  await ctx.tool.hook('execute.after', (event) => {
+   try {
+    const note = notes.get(event.id);
+    notes.delete(event.id);
+
+    if (event.status === 'error') {
+     // Only raw schema blobs are rewritten; ordinary failures stay as they are.
+     const message = event.error && event.error.message;
+     if (typeof message === 'string' && (message.includes('invalid_type') || message.includes('Expected'))) {
+      event.error.message = humanizeToolError(event.tool, event.error);
+     }
+     return;
+    }
+
+    if (!note || !event.result) return;
+    if (Array.isArray(event.result.content)) event.result.content.push({ type: 'text', text: note });
+    else if (typeof event.result.output === 'string') event.result.output += '\n' + note;
+   } catch (e) {
+    // same here: a lost note is better than a failed tool call
+   }
+  });
+ },
+
  repairInput,
  applyRelationalDefaults,
  humanizeToolError,

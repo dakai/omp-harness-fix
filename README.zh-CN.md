@@ -104,7 +104,8 @@ try parse(input) 原样
 ## 安装
 
 ```bash
-omp install git:github.com/dakai/omp-harness-fix
+omp install git:github.com/dakai/omp-harness-fix    # OMP
+opencode plugin add github:dakai/omp-harness-fix   # OpenCode
 ```
 
 ## 使用
@@ -130,6 +131,36 @@ await plugin.onToolCall({ toolName: 'readFile', input });
 await plugin.onToolError({ toolName: 'readFile', error });
 ```
 
+### 作为 OpenCode 插件
+
+OpenCode 读取插件的 **默认导出**；对 CommonJS 模块来说，默认导出就是 `module.exports`——因此
+`index.js` 通过 `id` + `setup` 无需改动即可作为 OpenCode 插件。
+
+```bash
+opencode plugin add github:dakai/omp-harness-fix
+```
+
+三层修复落在两个钩子上：
+
+| 层 | 钩子 | 行为 |
+|----|------|------|
+| Markdown 自动链接解包、Go/Svelte 规则、关联默认值 | `execute.before` | 就地改写 `event.input` |
+| 透明化 `Note:` | `execute.after` | 把提示追加到工具结果 |
+| 人性化错误 | `execute.after`（`status === "error"`） | 只改写 `invalid_type`/`Expected` 这类 schema 原始报错，普通错误原样保留 |
+
+两点 OpenCode 差异：
+
+- OpenCode 2.0.32+ 已内置同样四种形状的 **schema 驱动**修复（内置插件 `opencode.tool.input.repair`），
+  因此 OpenCode 路径**跳过**急切形状修复：那只会是在运行时通常已经修对的输入上再叠一道更粗的处理。
+  `repairInput` 对没有这层保护的 OMP/pi 保持原样。
+- `PluginContext` 不提供日志接口，因此下文按工具统计的遥测只在 OMP 侧可用。
+
+本地开发——直接在 `opencode.json` 里指向检出目录（该文件被监听，保存即生效）：
+
+```json
+{ "plugin": ["/abs/path/to/omp-harness-fix"] }
+```
+
 ### 独立使用
 
 ```js
@@ -144,11 +175,14 @@ const fixed = repairInput({ path: null, tags: '["a","b"]' });
 
 ```
 .
-├── index.js      # 全部修复逻辑 + OMP 钩子（约 150 行）
+├── index.js            # 全部修复逻辑 + OMP 与 OpenCode 钩子（约 200 行）
+├── extension.mjs       # pi/OMP 扩展入口
+├── test/
+│   └── opencode.test.js  # OpenCode 钩子测试（node:test，零依赖）
 └── package.json
 ```
 
-零依赖，无构建步骤。
+零依赖，无构建步骤。`npm test` 运行钩子测试。
 
 ## 设计原则（来自原文）
 

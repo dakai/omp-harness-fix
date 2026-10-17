@@ -104,7 +104,8 @@ Same shape as `cheap-then-careful` everywhere else: try the fast path, fall back
 ## Installation
 
 ```bash
-omp install git:github.com/dakai/omp-harness-fix
+omp install git:github.com/dakai/omp-harness-fix    # OMP
+opencode plugin add github:dakai/omp-harness-fix   # OpenCode
 ```
 
 ## Usage
@@ -130,6 +131,37 @@ await plugin.onToolCall({ toolName: 'readFile', input });
 await plugin.onToolError({ toolName: 'readFile', error });
 ```
 
+### As an OpenCode Plugin
+
+OpenCode reads a plugin's **default export**, and for a CommonJS module that default *is*
+`module.exports` — so `index.js` serves OpenCode unchanged through `id` + `setup`.
+
+```bash
+opencode plugin add github:dakai/omp-harness-fix
+```
+
+The layers land on two hooks:
+
+| Layer | Hook | What it does |
+|-------|------|--------------|
+| Markdown auto-link unwrap, Go/Svelte rules, relational defaults | `execute.before` | rewrites `event.input` in place |
+| Transparency `Note:` | `execute.after` | appends the note to the tool result |
+| Humanized errors | `execute.after` (`status === "error"`) | rewrites a raw `invalid_type`/`Expected` blob; ordinary failures pass through untouched |
+
+Two OpenCode-specific notes:
+
+- OpenCode 2.0.32+ already ships a **schema-driven** repair of the four shapes (built-in
+  plugin `opencode.tool.input.repair`), so the OpenCode path **skips** the eager shape repairs:
+  they would be a coarser second pass over input the runtime usually got right. `repairInput`
+  stays as it is for OMP/pi, which have no such layer.
+- `PluginContext` exposes no logger, so the per-tool telemetry counters below remain OMP-side.
+
+Local development — point `opencode.json` at the checkout instead (the file is watched, so saves reload it):
+
+```json
+{ "plugin": ["/abs/path/to/omp-harness-fix"] }
+```
+
 ### Standalone
 
 ```js
@@ -144,11 +176,14 @@ const fixed = repairInput({ path: null, tags: '["a","b"]' });
 
 ```
 .
-├── index.js      # All repair logic + OMP hooks (~150 LOC)
+├── index.js            # All repair logic + OMP & OpenCode hooks (~200 LOC)
+├── extension.mjs       # pi/OMP extension entry
+├── test/
+│   └── opencode.test.js  # OpenCode hook tests (node:test, no deps)
 └── package.json
 ```
 
-No dependencies. No build step.
+No dependencies. No build step. `npm test` runs the hook tests.
 
 ## Design Principles (from the article)
 
